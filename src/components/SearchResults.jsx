@@ -1,9 +1,18 @@
-export default function SearchResults({ results, onSelectSong, isLoading }) {
+export default function SearchResults({ results, onSelectSong, isLoading, isLoadingLyrics, selectedSong }) {
   if (isLoading) {
     return (
       <div className="search-results loading">
         <div className="loader"></div>
         <p>Searching songs...</p>
+      </div>
+    )
+  }
+
+  if (isLoadingLyrics && selectedSong) {
+    return (
+      <div className="search-results loading">
+        <div className="loader"></div>
+        <p>Fetching lyrics for "{selectedSong.title}"...</p>
       </div>
     )
   }
@@ -36,7 +45,7 @@ export default function SearchResults({ results, onSelectSong, isLoading }) {
         ))}
       </div>
       <p className="hint">
-        Click a song to view lyrics on Genius, then copy and paste them
+        Click a song to generate a haiku from its lyrics
       </p>
     </div>
   )

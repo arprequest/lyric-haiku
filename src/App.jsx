@@ -8,11 +8,14 @@ export default function App() {
   const [haikuResult, setHaikuResult] = useState(null)
   const [searchResults, setSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
+  const [isLoadingLyrics, setIsLoadingLyrics] = useState(false)
+  const [selectedSong, setSelectedSong] = useState(null)
   const [view, setView] = useState('input') // 'input' or 'result'
 
   const handleLyricsSubmit = (lyrics) => {
     const result = generateHaiku(lyrics)
     setHaikuResult(result)
+    setSelectedSong(null)
     setView('result')
   }
 
@@ -35,9 +38,31 @@ export default function App() {
     }
   }
 
-  const handleSelectSong = (song) => {
-    // Open lyrics page in new tab for user to copy
-    window.open(song.url, '_blank')
+  const handleSelectSong = async (song) => {
+    setIsLoadingLyrics(true)
+    setSelectedSong(song)
+
+    try {
+      const response = await fetch(`/api/lyrics?url=${encodeURIComponent(song.url)}`)
+
+      if (!response.ok) throw new Error('Failed to fetch lyrics')
+
+      const data = await response.json()
+
+      if (data.error) {
+        throw new Error(data.error)
+      }
+
+      const result = generateHaiku(data.lyrics)
+      setHaikuResult({ ...result, song })
+      setView('result')
+    } catch (error) {
+      console.error('Lyrics error:', error)
+      alert('Could not fetch lyrics. Opening Genius page instead.')
+      window.open(song.url, '_blank')
+    } finally {
+      setIsLoadingLyrics(false)
+    }
   }
 
   const handleReset = () => {
@@ -73,6 +98,8 @@ export default function App() {
               results={searchResults}
               onSelectSong={handleSelectSong}
               isLoading={isSearching}
+              isLoadingLyrics={isLoadingLyrics}
+              selectedSong={selectedSong}
             />
           </div>
         ) : (

@@ -19,6 +19,12 @@ export default function HaikuDisplay({ result, onReset }) {
   return (
     <div className="haiku-display haiku-success">
       <div className="haiku-content">
+        {result.song && (
+          <div className="song-credit">
+            <p>From "{result.song.title}" by {result.song.artist}</p>
+          </div>
+        )}
+
         <div className="haiku-poem">
           {result.haiku.map((line, index) => (
             <p key={index} className="haiku-line" style={{ animationDelay: `${index * 0.2}s` }}>

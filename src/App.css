@@ -381,6 +381,16 @@ body {
   max-width: 600px;
 }
 
+.song-credit {
+  margin-bottom: 2rem;
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+.song-credit p {
+  margin: 0;
+}
+
 .haiku-poem {
   margin-bottom: 3rem;
 }
