@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { gsap } from 'gsap'
 import LyricsInput from './components/LyricsInput'
 import HaikuDisplay from './components/HaikuDisplay'
 import SearchResults from './components/SearchResults'
+import HeroCanvas from './components/HeroCanvas'
+import useMousePosition from './hooks/useMousePosition'
 import { generateHaiku } from './utils/haikuGenerator'
 
 export default function App() {
@@ -12,6 +15,59 @@ export default function App() {
   const [isLoadingRandom, setIsLoadingRandom] = useState(false)
   const [selectedSong, setSelectedSong] = useState(null)
   const [view, setView] = useState('input') // 'input' or 'result'
+
+  // Interactive effects
+  const { position, normalized } = useMousePosition()
+  const heroRef = useRef(null)
+  const titleRef = useRef(null)
+  const taglineRef = useRef(null)
+  const inputRef = useRef(null)
+
+  // GSAP entrance animations
+  useEffect(() => {
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReducedMotion) return
+
+    const ctx = gsap.context(() => {
+      // Initial state
+      gsap.set([titleRef.current, taglineRef.current, inputRef.current], {
+        opacity: 0,
+        y: 30
+      })
+
+      // Animate in sequence
+      const tl = gsap.timeline({ delay: 0.2 })
+
+      tl.to(titleRef.current, {
+        opacity: 1,
+        y: 0,
+        duration: 0.8,
+        ease: 'power3.out'
+      })
+      .to(taglineRef.current, {
+        opacity: 1,
+        y: 0,
+        duration: 0.6,
+        ease: 'power3.out'
+      }, '-=0.4')
+      .to(inputRef.current, {
+        opacity: 1,
+        y: 0,
+        duration: 0.6,
+        ease: 'power3.out'
+      }, '-=0.3')
+    })
+
+    return () => ctx.revert()
+  }, [])
+
+  // Parallax transform styles
+  const titleParallax = {
+    transform: `translate(${normalized.x * -10}px, ${normalized.y * -10}px)`
+  }
+  const taglineParallax = {
+    transform: `translate(${normalized.x * 5}px, ${normalized.y * 5}px)`
+  }
 
   const handleLyricsSubmit = (lyrics) => {
     const result = generateHaiku(lyrics)
@@ -132,27 +188,35 @@ export default function App() {
 
       <main className="main">
         {view === 'input' ? (
-          <div className="input-section">
+          <div className="input-section" ref={heroRef}>
+            <HeroCanvas mousePosition={position} />
+
             <div className="hero-text">
-              <h2>Create haiku from<br /><span className="highlight">your favorite lyrics</span></h2>
-              <p>Paste song lyrics and we'll find lines with the perfect 5-7-5 syllable pattern</p>
+              <h2 ref={titleRef} style={titleParallax}>
+                Create haiku from<br /><span className="highlight">your favorite lyrics</span>
+              </h2>
+              <p ref={taglineRef} style={taglineParallax}>
+                Paste song lyrics and we'll find lines with the perfect 5-7-5 syllable pattern
+              </p>
             </div>
 
-            <LyricsInput
-              onLyricsSubmit={handleLyricsSubmit}
-              onSearch={handleSearch}
-              onRandomArtist={handleRandomArtist}
-              isSearching={isSearching}
-              isLoadingRandom={isLoadingRandom}
-            />
+            <div ref={inputRef}>
+              <LyricsInput
+                onLyricsSubmit={handleLyricsSubmit}
+                onSearch={handleSearch}
+                onRandomArtist={handleRandomArtist}
+                isSearching={isSearching}
+                isLoadingRandom={isLoadingRandom}
+              />
 
-            <SearchResults
-              results={searchResults}
-              onSelectSong={handleSelectSong}
-              isLoading={isSearching}
-              isLoadingLyrics={isLoadingLyrics}
-              selectedSong={selectedSong}
-            />
+              <SearchResults
+                results={searchResults}
+                onSelectSong={handleSelectSong}
+                isLoading={isSearching}
+                isLoadingLyrics={isLoadingLyrics}
+                selectedSong={selectedSong}
+              />
+            </div>
           </div>
         ) : (
           <HaikuDisplay result={haikuResult} onReset={handleReset} />
