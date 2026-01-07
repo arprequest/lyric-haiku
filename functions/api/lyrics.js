@@ -98,52 +98,57 @@ function cleanLyrics(html) {
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 
-  // Remove common non-lyric content
-  const linesToRemove = [
-    /^.*translations.*$/gim,
-    /^.*contributors.*$/gim,
-    /^.*transcription.*$/gim,
-    /^.*see.*live.*$/gim,
-    /^.*read more.*$/gim,
-    /^.*expand.*$/gim,
-    /^.*embed.*$/gim,
-    /^.*share.*$/gim,
-    /^.*copy.*link.*$/gim,
-    /^.*sign up.*$/gim,
-    /^.*log in.*$/gim,
-    /^\d+\s*embed$/gim,
-    /^you might also like$/gim,
-    /^.*genius.*$/gim,
-    /^pyong.*$/gim,
-    /^\d+$/, // standalone numbers
-  ]
-
-  for (const pattern of linesToRemove) {
-    text = text.replace(pattern, '')
-  }
-
-  // Split into lines and filter out short/suspicious lines at the end
+  // Split into lines for filtering
   let lines = text.split('\n').map(line => line.trim())
+
+  // Filter out non-lyric lines
+  lines = lines.filter(line => {
+    const lower = line.toLowerCase()
+
+    // Skip empty lines (we'll handle spacing later)
+    if (line === '') return true
+
+    // Remove lines containing these keywords
+    const badKeywords = [
+      'translations',
+      'contributors',
+      'contributor',
+      'transcription',
+      'read more',
+      'expand',
+      'embed',
+      'share url',
+      'copy link',
+      'sign up',
+      'log in',
+      'you might also like',
+      'genius',
+      'pyong',
+      'see live',
+      'get tickets',
+      'how to format lyrics',
+      'advertisement'
+    ]
+
+    for (const keyword of badKeywords) {
+      if (lower.includes(keyword)) return false
+    }
+
+    // Remove lines that are just numbers (like "304" or "52")
+    if (/^\d+$/.test(line)) return false
+
+    // Remove lines that are numbers followed by common words
+    if (/^\d+\s*(contributors?|translations?|embed)$/i.test(line)) return false
+
+    // Remove very short lines that look like UI elements
+    if (line.length <= 2 && !/^[a-zA-Z]{1,2}$/.test(line)) return false
+
+    return true
+  })
 
   // Remove empty lines at start and end
   while (lines.length > 0 && lines[0] === '') lines.shift()
   while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop()
-
-  // Remove trailing lines that look like metadata (very short or contain numbers only)
-  while (lines.length > 0) {
-    const lastLine = lines[lines.length - 1].toLowerCase()
-    if (
-      lastLine.length < 3 ||
-      /^\d+$/.test(lastLine) ||
-      lastLine.includes('contributor') ||
-      lastLine.includes('translation') ||
-      lastLine.includes('embed')
-    ) {
-      lines.pop()
-    } else {
-      break
-    }
-  }
 
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
 }
