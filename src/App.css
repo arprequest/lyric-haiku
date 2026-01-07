@@ -646,6 +646,63 @@ body {
   }
 }
 
+/* Mobile: Horizontal scroll strip instead of floating */
+@media (max-width: 768px) {
+  .haiku-bubbles {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    top: auto;
+    width: 100%;
+    height: auto;
+    padding: 1rem 0;
+    background: linear-gradient(to top, var(--bg-secondary) 80%, transparent);
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 1rem;
+    z-index: 10;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .haiku-bubbles::-webkit-scrollbar {
+    display: none;
+  }
+
+  .haiku-bubbles::before {
+    content: '';
+    flex-shrink: 0;
+    width: 0.5rem;
+  }
+
+  .haiku-bubbles::after {
+    content: '';
+    flex-shrink: 0;
+    width: 0.5rem;
+  }
+
+  .haiku-bubble {
+    position: relative;
+    flex-shrink: 0;
+    opacity: 0.9;
+    animation: none;
+    max-width: 200px;
+    top: auto;
+    left: auto;
+    right: auto;
+  }
+
+  .haiku-bubble:hover {
+    transform: none;
+  }
+
+  /* Add padding to footer so it's not hidden by bubbles */
+  .footer {
+    padding-bottom: 140px;
+  }
+}
+
 /* ===== Footer ===== */
 .footer {
   padding: 2rem;
