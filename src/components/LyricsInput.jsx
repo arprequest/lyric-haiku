@@ -1,9 +1,10 @@
 import { useState } from 'react'
 
-export default function LyricsInput({ onLyricsSubmit, onSearch, isSearching }) {
+export default function LyricsInput({ onLyricsSubmit, onSearch, onRandomArtist, isSearching, isLoadingRandom }) {
   const [lyrics, setLyrics] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeTab, setActiveTab] = useState('paste') // 'paste' or 'search'
+  const [artistName, setArtistName] = useState('')
+  const [activeTab, setActiveTab] = useState('paste') // 'paste', 'search', or 'random'
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -16,6 +17,13 @@ export default function LyricsInput({ onLyricsSubmit, onSearch, isSearching }) {
     e.preventDefault()
     if (searchQuery.trim()) {
       onSearch(searchQuery)
+    }
+  }
+
+  const handleRandomArtist = (e) => {
+    e.preventDefault()
+    if (artistName.trim()) {
+      onRandomArtist(artistName)
     }
   }
 
@@ -34,9 +42,15 @@ export default function LyricsInput({ onLyricsSubmit, onSearch, isSearching }) {
         >
           Search Song
         </button>
+        <button
+          className={`tab ${activeTab === 'random' ? 'active' : ''}`}
+          onClick={() => setActiveTab('random')}
+        >
+          Surprise Me
+        </button>
       </div>
 
-      {activeTab === 'paste' ? (
+      {activeTab === 'paste' && (
         <form onSubmit={handleSubmit} className="paste-form">
           <textarea
             value={lyrics}
@@ -49,7 +63,9 @@ export default function LyricsInput({ onLyricsSubmit, onSearch, isSearching }) {
             Generate Haiku
           </button>
         </form>
-      ) : (
+      )}
+
+      {activeTab === 'search' && (
         <form onSubmit={handleSearch} className="search-form">
           <div className="search-input-wrapper">
             <input
@@ -63,6 +79,26 @@ export default function LyricsInput({ onLyricsSubmit, onSearch, isSearching }) {
               {isSearching ? 'Searching...' : 'Search'}
             </button>
           </div>
+        </form>
+      )}
+
+      {activeTab === 'random' && (
+        <form onSubmit={handleRandomArtist} className="random-form">
+          <div className="search-input-wrapper">
+            <input
+              type="text"
+              value={artistName}
+              onChange={(e) => setArtistName(e.target.value)}
+              placeholder="Enter an artist name..."
+              className="search-input"
+            />
+            <button type="submit" className="btn btn-primary" disabled={!artistName.trim() || isLoadingRandom}>
+              {isLoadingRandom ? 'Finding...' : 'Surprise Me'}
+            </button>
+          </div>
+          <p className="hint">
+            We'll pick a random song from this artist and create a haiku
+          </p>
         </form>
       )}
 

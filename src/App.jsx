@@ -9,6 +9,7 @@ export default function App() {
   const [searchResults, setSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
   const [isLoadingLyrics, setIsLoadingLyrics] = useState(false)
+  const [isLoadingRandom, setIsLoadingRandom] = useState(false)
   const [selectedSong, setSelectedSong] = useState(null)
   const [view, setView] = useState('input') // 'input' or 'result'
 
@@ -65,16 +66,65 @@ export default function App() {
     }
   }
 
+  const handleRandomArtist = async (artistName) => {
+    setIsLoadingRandom(true)
+
+    try {
+      // Search for songs by the artist
+      const searchResponse = await fetch(`/api/search?q=${encodeURIComponent(artistName)}`)
+
+      if (!searchResponse.ok) throw new Error('Search failed')
+
+      const searchData = await searchResponse.json()
+      const songs = searchData.songs || []
+
+      // Filter songs that match the artist name (case insensitive)
+      const artistSongs = songs.filter(song =>
+        song.artist.toLowerCase().includes(artistName.toLowerCase())
+      )
+
+      if (artistSongs.length === 0) {
+        alert(`No songs found for "${artistName}". Try a different artist.`)
+        return
+      }
+
+      // Pick a random song
+      const randomSong = artistSongs[Math.floor(Math.random() * artistSongs.length)]
+      setSelectedSong(randomSong)
+
+      // Fetch lyrics for the random song
+      const lyricsResponse = await fetch(`/api/lyrics?url=${encodeURIComponent(randomSong.url)}`)
+
+      if (!lyricsResponse.ok) throw new Error('Failed to fetch lyrics')
+
+      const lyricsData = await lyricsResponse.json()
+
+      if (lyricsData.error) {
+        throw new Error(lyricsData.error)
+      }
+
+      const result = generateHaiku(lyricsData.lyrics)
+      setHaikuResult({ ...result, song: randomSong })
+      setView('result')
+    } catch (error) {
+      console.error('Random artist error:', error)
+      alert('Could not find a song. Please try again or use a different artist.')
+    } finally {
+      setIsLoadingRandom(false)
+    }
+  }
+
   const handleReset = () => {
     setHaikuResult(null)
     setSearchResults([])
+    setSelectedSong(null)
     setView('input')
   }
 
   return (
     <div className="app">
       <header className="header">
-        <h1 className="logo">
+        <h1 className="logo" onClick={handleReset} style={{ cursor: 'pointer' }}>
           <span className="logo-accent">Lyric</span> Haiku
         </h1>
         <p className="tagline">Transform songs into poetry</p>
@@ -91,7 +141,9 @@ export default function App() {
             <LyricsInput
               onLyricsSubmit={handleLyricsSubmit}
               onSearch={handleSearch}
+              onRandomArtist={handleRandomArtist}
               isSearching={isSearching}
+              isLoadingRandom={isLoadingRandom}
             />
 
             <SearchResults

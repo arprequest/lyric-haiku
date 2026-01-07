@@ -13,5 +13,17 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+
+    <!-- SVG Filter for liquid/wave effect -->
+    <svg style="position: absolute; width: 0; height: 0;">
+      <defs>
+        <filter id="liquid">
+          <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" result="noise" seed="5">
+            <animate attributeName="baseFrequency" dur="15s" values="0.015;0.02;0.015" repeatCount="indefinite"/>
+          </feTurbulence>
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="20" xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+      </defs>
+    </svg>
   </body>
 </html>
