@@ -2,17 +2,64 @@ import { useState, useEffect, useRef } from 'react'
 import { gsap } from 'gsap'
 import LyricsInput from './components/LyricsInput'
 import HaikuDisplay from './components/HaikuDisplay'
+import HaikuBubbles from './components/HaikuBubbles'
 import SearchResults from './components/SearchResults'
 import { generateHaiku, generateClosestHaiku } from './utils/haikuGenerator'
 
+// Load history from localStorage
+const loadHistory = () => {
+  try {
+    const saved = localStorage.getItem('haikuHistory')
+    return saved ? JSON.parse(saved) : []
+  } catch {
+    return []
+  }
+}
+
 export default function App() {
   const [haikuResult, setHaikuResult] = useState(null)
+  const [haikuHistory, setHaikuHistory] = useState(loadHistory)
   const [searchResults, setSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
   const [isLoadingLyrics, setIsLoadingLyrics] = useState(false)
   const [isLoadingRandom, setIsLoadingRandom] = useState(false)
   const [selectedSong, setSelectedSong] = useState(null)
   const [view, setView] = useState('input') // 'input' or 'result'
+
+  // Save history to localStorage
+  useEffect(() => {
+    localStorage.setItem('haikuHistory', JSON.stringify(haikuHistory))
+  }, [haikuHistory])
+
+  // Add haiku to history
+  const addToHistory = (result) => {
+    if (!result.success) return
+
+    const historyItem = {
+      id: crypto.randomUUID(),
+      haiku: result.haiku,
+      song: result.song,
+      isExact: result.isExact,
+      createdAt: Date.now()
+    }
+
+    setHaikuHistory(prev => [historyItem, ...prev].slice(0, 20)) // Keep last 20
+  }
+
+  // Handle bubble click - show that haiku
+  const handleSelectFromHistory = (historyItem) => {
+    setHaikuResult({
+      haiku: historyItem.haiku,
+      song: historyItem.song,
+      isExact: historyItem.isExact,
+      lines: historyItem.haiku.map((line, i) => ({
+        original: line,
+        syllables: [5, 7, 5][i]
+      })),
+      success: true
+    })
+    setView('result')
+  }
 
   // GSAP refs
   const titleRef = useRef(null)
@@ -99,7 +146,9 @@ export default function App() {
         result = generateClosestHaiku(data.lyrics)
       }
 
-      setHaikuResult({ ...result, song })
+      const fullResult = { ...result, song }
+      setHaikuResult(fullResult)
+      addToHistory(fullResult)
       setView('result')
     } catch (error) {
       console.error('Lyrics error:', error)
@@ -159,7 +208,9 @@ export default function App() {
 
           if (result.success && result.isExact) {
             // Found exact 5-7-5 haiku
-            setHaikuResult({ ...result, song: randomSong })
+            const fullResult = { ...result, song: randomSong }
+            setHaikuResult(fullResult)
+            addToHistory(fullResult)
             setView('result')
             return
           }
@@ -180,6 +231,7 @@ export default function App() {
       // No exact match found after all attempts, use closest match
       if (lastResult && lastResult.success) {
         setHaikuResult(lastResult)
+        addToHistory(lastResult)
         setView('result')
       } else {
         alert('Could not generate a haiku from this artist\'s songs. Try a different artist.')
@@ -201,6 +253,8 @@ export default function App() {
 
   return (
     <div className="app">
+      <HaikuBubbles history={haikuHistory} onSelectHaiku={handleSelectFromHistory} />
+
       <header className="header">
         <h1 className="logo" onClick={handleReset} style={{ cursor: 'pointer' }}>
           <span className="logo-accent">Lyric</span> Haiku
