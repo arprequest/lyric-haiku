@@ -1,4 +1,1 @@
 # Lyric Haiku
-
-
-
