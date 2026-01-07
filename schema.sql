@@ -12,3 +12,14 @@ CREATE TABLE IF NOT EXISTS haikus (
 
 -- Index for fetching recent haikus
 CREATE INDEX IF NOT EXISTS idx_haikus_created_at ON haikus(created_at DESC);
+
+-- Event tracking table
+CREATE TABLE IF NOT EXISTS events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  type TEXT NOT NULL,
+  data TEXT,
+  created_at INTEGER NOT NULL
+);
+
+-- Index for fetching events by type and date
+CREATE INDEX IF NOT EXISTS idx_events_type_date ON events(type, created_at DESC);

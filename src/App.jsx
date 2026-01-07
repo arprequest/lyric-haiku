@@ -6,6 +6,15 @@ import HaikuBubbles from './components/HaikuBubbles'
 import SearchResults from './components/SearchResults'
 import { generateHaiku, generateClosestHaiku } from './utils/haikuGenerator'
 
+// Track event (fire and forget)
+const trackEvent = (type, data) => {
+  fetch('/api/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type, data })
+  }).catch(() => {}) // Ignore errors
+}
+
 export default function App() {
   const [haikuResult, setHaikuResult] = useState(null)
   const [communityHaikus, setCommunityHaikus] = useState([])
@@ -123,6 +132,9 @@ export default function App() {
     setIsSearching(true)
     setSearchResults([])
 
+    // Track search event
+    trackEvent('search', { query })
+
     try {
       const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`)
 
@@ -164,9 +176,11 @@ export default function App() {
       const fullResult = { ...result, song }
       setHaikuResult(fullResult)
       saveHaikuToCommunity(fullResult)
+      trackEvent('generate', { song: song.title, artist: song.artist, isExact: result.isExact })
       setView('result')
     } catch (error) {
       console.error('Lyrics error:', error)
+      trackEvent('error', { type: 'lyrics_fetch', song: song.title })
       alert('Could not fetch lyrics. Opening Genius page instead.')
       window.open(song.url, '_blank')
     } finally {
@@ -226,6 +240,7 @@ export default function App() {
             const fullResult = { ...result, song: randomSong }
             setHaikuResult(fullResult)
             saveHaikuToCommunity(fullResult)
+            trackEvent('generate', { song: randomSong.title, artist: randomSong.artist, isExact: true, mode: 'random' })
             setView('result')
             return
           }
@@ -247,6 +262,7 @@ export default function App() {
       if (lastResult && lastResult.success) {
         setHaikuResult(lastResult)
         saveHaikuToCommunity(lastResult)
+        trackEvent('generate', { song: lastResult.song.title, artist: lastResult.song.artist, isExact: false, mode: 'random' })
         setView('result')
       } else {
         alert('Could not generate a haiku from this artist\'s songs. Try a different artist.')
