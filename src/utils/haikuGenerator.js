@@ -1,6 +1,14 @@
 import { countSyllables } from './syllableCounter'
 
 /**
+ * Normalize text for duplicate detection
+ * Lowercases, removes punctuation, trims whitespace
+ */
+function normalizeText(text) {
+  return text.toLowerCase().replace(/[^\w\s]/g, '').trim()
+}
+
+/**
  * Parse lyrics into individual lines
  * @param {string} lyrics - Raw lyrics text
  * @returns {string[]} - Array of non-empty lines
@@ -18,9 +26,11 @@ function parseLines(lyrics) {
 /**
  * Find line with exact syllable count
  */
-function findLineWithSyllables(lines, syllableCount, usedIndices) {
+function findLineWithSyllables(lines, syllableCount, usedIndices, usedTexts) {
   for (let i = 0; i < lines.length; i++) {
     if (usedIndices.has(i)) continue
+    const normalized = normalizeText(lines[i])
+    if (usedTexts.has(normalized)) continue
     const count = countSyllables(lines[i])
     if (count === syllableCount) {
       return { line: lines[i], index: i, syllables: count }
@@ -32,12 +42,14 @@ function findLineWithSyllables(lines, syllableCount, usedIndices) {
 /**
  * Find line closest to target syllable count
  */
-function findClosestLine(lines, targetSyllables, usedIndices) {
+function findClosestLine(lines, targetSyllables, usedIndices, usedTexts) {
   let bestMatch = null
   let bestDiff = Infinity
 
   for (let i = 0; i < lines.length; i++) {
     if (usedIndices.has(i)) continue
+    const normalized = normalizeText(lines[i])
+    if (usedTexts.has(normalized)) continue
     const count = countSyllables(lines[i])
     // Skip very short or very long lines
     if (count < 2 || count > 12) continue
@@ -60,23 +72,26 @@ function findClosestLine(lines, targetSyllables, usedIndices) {
 export function generateHaiku(lyrics) {
   const lines = parseLines(lyrics)
   const usedIndices = new Set()
+  const usedTexts = new Set()
 
   // Find first line with 5 syllables
-  const line1 = findLineWithSyllables(lines, 5, usedIndices)
+  const line1 = findLineWithSyllables(lines, 5, usedIndices, usedTexts)
   if (!line1) {
     return { haiku: [], lines: [], success: false, isExact: false }
   }
   usedIndices.add(line1.index)
+  usedTexts.add(normalizeText(line1.line))
 
   // Find first line with 7 syllables
-  const line2 = findLineWithSyllables(lines, 7, usedIndices)
+  const line2 = findLineWithSyllables(lines, 7, usedIndices, usedTexts)
   if (!line2) {
     return { haiku: [], lines: [], success: false, isExact: false }
   }
   usedIndices.add(line2.index)
+  usedTexts.add(normalizeText(line2.line))
 
   // Find second line with 5 syllables
-  const line3 = findLineWithSyllables(lines, 5, usedIndices)
+  const line3 = findLineWithSyllables(lines, 5, usedIndices, usedTexts)
   if (!line3) {
     return { haiku: [], lines: [], success: false, isExact: false }
   }
@@ -106,16 +121,17 @@ export function generateClosestHaiku(lyrics) {
   }
 
   const usedIndices = new Set()
+  const usedTexts = new Set()
   const targets = [5, 7, 5]
   const result = []
 
   for (const target of targets) {
     // Try exact match first
-    let match = findLineWithSyllables(lines, target, usedIndices)
+    let match = findLineWithSyllables(lines, target, usedIndices, usedTexts)
 
     // Fall back to closest match
     if (!match) {
-      match = findClosestLine(lines, target, usedIndices)
+      match = findClosestLine(lines, target, usedIndices, usedTexts)
     }
 
     if (!match) {
@@ -123,6 +139,7 @@ export function generateClosestHaiku(lyrics) {
     }
 
     usedIndices.add(match.index)
+    usedTexts.add(normalizeText(match.line))
     result.push(match)
   }
 
