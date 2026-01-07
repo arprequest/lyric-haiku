@@ -6,19 +6,9 @@ import HaikuBubbles from './components/HaikuBubbles'
 import SearchResults from './components/SearchResults'
 import { generateHaiku, generateClosestHaiku } from './utils/haikuGenerator'
 
-// Load history from localStorage
-const loadHistory = () => {
-  try {
-    const saved = localStorage.getItem('haikuHistory')
-    return saved ? JSON.parse(saved) : []
-  } catch {
-    return []
-  }
-}
-
 export default function App() {
   const [haikuResult, setHaikuResult] = useState(null)
-  const [haikuHistory, setHaikuHistory] = useState(loadHistory)
+  const [communityHaikus, setCommunityHaikus] = useState([])
   const [searchResults, setSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
   const [isLoadingLyrics, setIsLoadingLyrics] = useState(false)
@@ -26,24 +16,49 @@ export default function App() {
   const [selectedSong, setSelectedSong] = useState(null)
   const [view, setView] = useState('input') // 'input' or 'result'
 
-  // Save history to localStorage
+  // Fetch community haikus on mount
   useEffect(() => {
-    localStorage.setItem('haikuHistory', JSON.stringify(haikuHistory))
-  }, [haikuHistory])
+    const fetchCommunityHaikus = async () => {
+      try {
+        const response = await fetch('/api/haikus')
+        if (response.ok) {
+          const data = await response.json()
+          setCommunityHaikus(data.haikus || [])
+        }
+      } catch (error) {
+        console.error('Failed to fetch community haikus:', error)
+      }
+    }
+    fetchCommunityHaikus()
+  }, [])
 
-  // Add haiku to history
-  const addToHistory = (result) => {
+  // Save haiku to database and update local state
+  const saveHaikuToCommunity = async (result) => {
     if (!result.success) return
 
-    const historyItem = {
+    const haikuData = {
       id: crypto.randomUUID(),
       haiku: result.haiku,
       song: result.song,
-      isExact: result.isExact,
-      createdAt: Date.now()
+      isExact: result.isExact
     }
 
-    setHaikuHistory(prev => [historyItem, ...prev].slice(0, 20)) // Keep last 20
+    // Add to local state immediately
+    setCommunityHaikus(prev => [
+      { ...haikuData, createdAt: Date.now() },
+      ...prev
+    ].slice(0, 20))
+
+    // Save to database
+    try {
+      await fetch('/api/haikus', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(haikuData)
+      })
+    } catch (error) {
+      console.error('Failed to save haiku:', error)
+    }
   }
 
   // Handle bubble click - show that haiku
@@ -148,7 +163,7 @@ export default function App() {
 
       const fullResult = { ...result, song }
       setHaikuResult(fullResult)
-      addToHistory(fullResult)
+      saveHaikuToCommunity(fullResult)
       setView('result')
     } catch (error) {
       console.error('Lyrics error:', error)
@@ -210,7 +225,7 @@ export default function App() {
             // Found exact 5-7-5 haiku
             const fullResult = { ...result, song: randomSong }
             setHaikuResult(fullResult)
-            addToHistory(fullResult)
+            saveHaikuToCommunity(fullResult)
             setView('result')
             return
           }
@@ -231,7 +246,7 @@ export default function App() {
       // No exact match found after all attempts, use closest match
       if (lastResult && lastResult.success) {
         setHaikuResult(lastResult)
-        addToHistory(lastResult)
+        saveHaikuToCommunity(lastResult)
         setView('result')
       } else {
         alert('Could not generate a haiku from this artist\'s songs. Try a different artist.')
@@ -253,7 +268,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <HaikuBubbles history={haikuHistory} onSelectHaiku={handleSelectFromHistory} />
+      <HaikuBubbles history={communityHaikus} onSelectHaiku={handleSelectFromHistory} />
 
       <header className="header">
         <h1 className="logo" onClick={handleReset} style={{ cursor: 'pointer' }}>
