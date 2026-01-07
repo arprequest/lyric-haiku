@@ -4,8 +4,6 @@ import HaikuDisplay from './components/HaikuDisplay'
 import SearchResults from './components/SearchResults'
 import { generateHaiku } from './utils/haikuGenerator'
 
-const GENIUS_API_KEY = import.meta.env.VITE_GENIUS_API_KEY
-
 export default function App() {
   const [haikuResult, setHaikuResult] = useState(null)
   const [searchResults, setSearchResults] = useState([])
@@ -19,41 +17,19 @@ export default function App() {
   }
 
   const handleSearch = async (query) => {
-    if (!GENIUS_API_KEY) {
-      alert('Genius API key not configured. Please paste lyrics directly.')
-      return
-    }
-
     setIsSearching(true)
     setSearchResults([])
 
     try {
-      // Note: Direct browser requests to Genius API may be blocked by CORS
-      // In production, you'd proxy this through a serverless function
-      const response = await fetch(
-        `https://api.genius.com/search?q=${encodeURIComponent(query)}`,
-        {
-          headers: {
-            Authorization: `Bearer ${GENIUS_API_KEY}`
-          }
-        }
-      )
+      const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`)
 
       if (!response.ok) throw new Error('Search failed')
 
       const data = await response.json()
-      const songs = data.response.hits.map((hit) => ({
-        id: hit.result.id,
-        title: hit.result.title,
-        artist: hit.result.primary_artist.name,
-        thumbnail: hit.result.song_art_image_thumbnail_url,
-        url: hit.result.url
-      }))
-
-      setSearchResults(songs)
+      setSearchResults(data.songs || [])
     } catch (error) {
       console.error('Search error:', error)
-      alert('Search failed. This may be due to CORS restrictions. Please paste lyrics directly.')
+      alert('Search failed. Please try again or paste lyrics directly.')
     } finally {
       setIsSearching(false)
     }
