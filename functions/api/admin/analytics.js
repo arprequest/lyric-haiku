@@ -9,7 +9,7 @@ const ANALYTICS_QUERY = `
   query GetZoneAnalytics($zoneTag: String!, $since: String!, $until: String!) {
     viewer {
       zones(filter: { zoneTag: $zoneTag }) {
-        httpRequests1dGroups(
+        dailyData: httpRequests1dGroups(
           limit: 7
           filter: { date_geq: $since, date_leq: $until }
           orderBy: [date_ASC]
@@ -18,19 +18,6 @@ const ANALYTICS_QUERY = `
             requests
             pageViews
             bytes
-          }
-          uniq {
-            uniques
-          }
-          dimensions {
-            date
-          }
-        }
-        httpRequests1dGroups(
-          limit: 1
-          filter: { date_geq: $since, date_leq: $until }
-        ) {
-          sum {
             countryMap {
               clientCountryName
               requests
@@ -39,6 +26,12 @@ const ANALYTICS_QUERY = `
               uaBrowserFamily
               pageViews
             }
+          }
+          uniq {
+            uniques
+          }
+          dimensions {
+            date
           }
         }
       }
@@ -93,7 +86,7 @@ export async function onRequestGet(context) {
     // Extract and format the data
     const zones = data.data?.viewer?.zones || []
     const zone = zones[0] || {}
-    const dailyData = zone.httpRequests1dGroups || []
+    const dailyData = zone.dailyData || []
 
     // Calculate totals
     let totalRequests = 0
@@ -115,17 +108,29 @@ export async function onRequestGet(context) {
       }
     }
 
-    // Get country and browser data from the aggregated query
-    const aggregated = dailyData[dailyData.length - 1] || {}
-    const countries = (aggregated.sum?.countryMap || [])
-      .sort((a, b) => b.requests - a.requests)
-      .slice(0, 10)
-      .map(c => ({ name: c.clientCountryName, value: c.requests }))
+    // Aggregate country and browser data across all days
+    const countryTotals = {}
+    const browserTotals = {}
 
-    const browsers = (aggregated.sum?.browserMap || [])
-      .sort((a, b) => b.pageViews - a.pageViews)
+    for (const day of dailyData) {
+      for (const c of day.sum?.countryMap || []) {
+        countryTotals[c.clientCountryName] = (countryTotals[c.clientCountryName] || 0) + c.requests
+      }
+      for (const b of day.sum?.browserMap || []) {
+        const name = b.uaBrowserFamily || 'Unknown'
+        browserTotals[name] = (browserTotals[name] || 0) + b.pageViews
+      }
+    }
+
+    const countries = Object.entries(countryTotals)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10)
+
+    const browsers = Object.entries(browserTotals)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
       .slice(0, 5)
-      .map(b => ({ name: b.uaBrowserFamily || 'Unknown', value: b.pageViews }))
 
     return Response.json({
       configured: true,
