@@ -3,8 +3,6 @@ import { gsap } from 'gsap'
 import LyricsInput from './components/LyricsInput'
 import HaikuDisplay from './components/HaikuDisplay'
 import SearchResults from './components/SearchResults'
-import HeroCanvas from './components/HeroCanvas'
-import useMousePosition from './hooks/useMousePosition'
 import { generateHaiku } from './utils/haikuGenerator'
 
 export default function App() {
@@ -16,9 +14,7 @@ export default function App() {
   const [selectedSong, setSelectedSong] = useState(null)
   const [view, setView] = useState('input') // 'input' or 'result'
 
-  // Interactive effects
-  const { position, normalized } = useMousePosition()
-  const heroRef = useRef(null)
+  // GSAP refs
   const titleRef = useRef(null)
   const taglineRef = useRef(null)
   const inputRef = useRef(null)
@@ -60,14 +56,6 @@ export default function App() {
 
     return () => ctx.revert()
   }, [])
-
-  // Parallax transform styles
-  const titleParallax = {
-    transform: `translate(${normalized.x * -10}px, ${normalized.y * -10}px)`
-  }
-  const taglineParallax = {
-    transform: `translate(${normalized.x * 5}px, ${normalized.y * 5}px)`
-  }
 
   const handleLyricsSubmit = (lyrics) => {
     const result = generateHaiku(lyrics)
@@ -188,14 +176,12 @@ export default function App() {
 
       <main className="main">
         {view === 'input' ? (
-          <div className="input-section" ref={heroRef}>
-            <HeroCanvas mousePosition={position} />
-
+          <div className="input-section">
             <div className="hero-text">
-              <h2 ref={titleRef} style={titleParallax}>
+              <h2 ref={titleRef}>
                 Create haiku from<br /><span className="highlight">your favorite lyrics</span>
               </h2>
-              <p ref={taglineRef} style={taglineParallax}>
+              <p ref={taglineRef}>
                 Paste song lyrics and we'll find lines with the perfect 5-7-5 syllable pattern
               </p>
             </div>
