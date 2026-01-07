@@ -110,9 +110,10 @@ function cleanLyrics(html) {
 
     // Remove lines containing these keywords
     const badKeywords = [
+      'translation',
       'translations',
-      'contributors',
       'contributor',
+      'contributors',
       'transcription',
       'read more',
       'expand',
@@ -127,7 +128,10 @@ function cleanLyrics(html) {
       'see live',
       'get tickets',
       'how to format lyrics',
-      'advertisement'
+      'advertisement',
+      'spotify',
+      'apple music',
+      'verified'
     ]
 
     for (const keyword of badKeywords) {
@@ -137,8 +141,11 @@ function cleanLyrics(html) {
     // Remove lines that are just numbers (like "304" or "52")
     if (/^\d+$/.test(line)) return false
 
-    // Remove lines that are numbers followed by common words
-    if (/^\d+\s*(contributors?|translations?|embed)$/i.test(line)) return false
+    // Remove lines that start with numbers followed by space and text (like "304 Contributors")
+    if (/^\d+\s+\w+/i.test(line) && badKeywords.some(kw => lower.includes(kw))) return false
+
+    // Remove lines that are numbers followed by common words (with or without space)
+    if (/^\d+\s*(contributors?|translations?|embed)/i.test(line)) return false
 
     // Remove very short lines that look like UI elements
     if (line.length <= 2 && !/^[a-zA-Z]{1,2}$/.test(line)) return false
