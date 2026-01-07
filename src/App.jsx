@@ -3,7 +3,7 @@ import { gsap } from 'gsap'
 import LyricsInput from './components/LyricsInput'
 import HaikuDisplay from './components/HaikuDisplay'
 import SearchResults from './components/SearchResults'
-import { generateHaiku } from './utils/haikuGenerator'
+import { generateHaiku, generateClosestHaiku } from './utils/haikuGenerator'
 
 export default function App() {
   const [haikuResult, setHaikuResult] = useState(null)
@@ -57,13 +57,6 @@ export default function App() {
     return () => ctx.revert()
   }, [])
 
-  const handleLyricsSubmit = (lyrics) => {
-    const result = generateHaiku(lyrics)
-    setHaikuResult(result)
-    setSelectedSong(null)
-    setView('result')
-  }
-
   const handleSearch = async (query) => {
     setIsSearching(true)
     setSearchResults([])
@@ -77,7 +70,7 @@ export default function App() {
       setSearchResults(data.songs || [])
     } catch (error) {
       console.error('Search error:', error)
-      alert('Search failed. Please try again or paste lyrics directly.')
+      alert('Search failed. Please try again.')
     } finally {
       setIsSearching(false)
     }
@@ -98,7 +91,14 @@ export default function App() {
         throw new Error(data.error)
       }
 
-      const result = generateHaiku(data.lyrics)
+      // Try exact haiku first
+      let result = generateHaiku(data.lyrics)
+
+      // If no exact match, use closest match
+      if (!result.success) {
+        result = generateClosestHaiku(data.lyrics)
+      }
+
       setHaikuResult({ ...result, song })
       setView('result')
     } catch (error) {
@@ -132,24 +132,58 @@ export default function App() {
         return
       }
 
-      // Pick a random song
-      const randomSong = artistSongs[Math.floor(Math.random() * artistSongs.length)]
-      setSelectedSong(randomSong)
+      // Shuffle the songs array for random selection
+      const shuffledSongs = [...artistSongs].sort(() => Math.random() - 0.5)
 
-      // Fetch lyrics for the random song
-      const lyricsResponse = await fetch(`/api/lyrics?url=${encodeURIComponent(randomSong.url)}`)
+      const maxAttempts = Math.min(10, shuffledSongs.length)
+      let lastResult = null
+      let lastSong = null
 
-      if (!lyricsResponse.ok) throw new Error('Failed to fetch lyrics')
+      // Try up to maxAttempts songs looking for exact 5-7-5
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const randomSong = shuffledSongs[attempt]
+        lastSong = randomSong
+        setSelectedSong(randomSong)
 
-      const lyricsData = await lyricsResponse.json()
+        try {
+          const lyricsResponse = await fetch(`/api/lyrics?url=${encodeURIComponent(randomSong.url)}`)
 
-      if (lyricsData.error) {
-        throw new Error(lyricsData.error)
+          if (!lyricsResponse.ok) continue
+
+          const lyricsData = await lyricsResponse.json()
+
+          if (lyricsData.error) continue
+
+          // Try exact haiku
+          const result = generateHaiku(lyricsData.lyrics)
+
+          if (result.success && result.isExact) {
+            // Found exact 5-7-5 haiku
+            setHaikuResult({ ...result, song: randomSong })
+            setView('result')
+            return
+          }
+
+          // Store closest match as fallback
+          if (!lastResult) {
+            lastResult = generateClosestHaiku(lyricsData.lyrics)
+            if (lastResult.success) {
+              lastResult.song = randomSong
+            }
+          }
+        } catch {
+          // Continue to next song if this one fails
+          continue
+        }
       }
 
-      const result = generateHaiku(lyricsData.lyrics)
-      setHaikuResult({ ...result, song: randomSong })
-      setView('result')
+      // No exact match found after all attempts, use closest match
+      if (lastResult && lastResult.success) {
+        setHaikuResult(lastResult)
+        setView('result')
+      } else {
+        alert('Could not generate a haiku from this artist\'s songs. Try a different artist.')
+      }
     } catch (error) {
       console.error('Random artist error:', error)
       alert('Could not find a song. Please try again or use a different artist.')
@@ -182,13 +216,12 @@ export default function App() {
                 Create haiku from<br /><span className="highlight">your favorite lyrics</span>
               </h2>
               <p ref={taglineRef}>
-                Paste song lyrics and we'll find lines with the perfect 5-7-5 syllable pattern
+                Search for a song and we'll find lines with the perfect 5-7-5 syllable pattern
               </p>
             </div>
 
             <div ref={inputRef}>
               <LyricsInput
-                onLyricsSubmit={handleLyricsSubmit}
                 onSearch={handleSearch}
                 onRandomArtist={handleRandomArtist}
                 isSearching={isSearching}

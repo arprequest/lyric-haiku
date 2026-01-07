@@ -16,29 +16,46 @@ function parseLines(lyrics) {
 }
 
 /**
- * Find lines with a specific syllable count
- * @param {string[]} lines - Array of lines
- * @param {number} syllableCount - Target syllable count
- * @param {Set<number>} usedIndices - Indices already used
- * @returns {{ line: string, index: number } | null}
+ * Find line with exact syllable count
  */
 function findLineWithSyllables(lines, syllableCount, usedIndices) {
   for (let i = 0; i < lines.length; i++) {
     if (usedIndices.has(i)) continue
-
     const count = countSyllables(lines[i])
     if (count === syllableCount) {
-      return { line: lines[i], index: i }
+      return { line: lines[i], index: i, syllables: count }
     }
   }
   return null
 }
 
 /**
- * Generate a haiku from song lyrics
- * Haiku structure: 5-7-5 syllables
+ * Find line closest to target syllable count
+ */
+function findClosestLine(lines, targetSyllables, usedIndices) {
+  let bestMatch = null
+  let bestDiff = Infinity
+
+  for (let i = 0; i < lines.length; i++) {
+    if (usedIndices.has(i)) continue
+    const count = countSyllables(lines[i])
+    // Skip very short or very long lines
+    if (count < 2 || count > 12) continue
+
+    const diff = Math.abs(count - targetSyllables)
+    if (diff < bestDiff) {
+      bestDiff = diff
+      bestMatch = { line: lines[i], index: i, syllables: count }
+    }
+  }
+
+  return bestMatch
+}
+
+/**
+ * Generate an exact 5-7-5 haiku from song lyrics
  * @param {string} lyrics - The song lyrics
- * @returns {{ haiku: string[], lines: { original: string, syllables: number }[], success: boolean }}
+ * @returns {{ haiku: string[], lines: { original: string, syllables: number }[], success: boolean, isExact: boolean }}
  */
 export function generateHaiku(lyrics) {
   const lines = parseLines(lyrics)
@@ -47,36 +64,21 @@ export function generateHaiku(lyrics) {
   // Find first line with 5 syllables
   const line1 = findLineWithSyllables(lines, 5, usedIndices)
   if (!line1) {
-    return {
-      haiku: [],
-      lines: [],
-      success: false,
-      error: 'Could not find a line with 5 syllables for the first line'
-    }
+    return { haiku: [], lines: [], success: false, isExact: false }
   }
   usedIndices.add(line1.index)
 
   // Find first line with 7 syllables
   const line2 = findLineWithSyllables(lines, 7, usedIndices)
   if (!line2) {
-    return {
-      haiku: [],
-      lines: [],
-      success: false,
-      error: 'Could not find a line with 7 syllables for the second line'
-    }
+    return { haiku: [], lines: [], success: false, isExact: false }
   }
   usedIndices.add(line2.index)
 
   // Find second line with 5 syllables
   const line3 = findLineWithSyllables(lines, 5, usedIndices)
   if (!line3) {
-    return {
-      haiku: [],
-      lines: [],
-      success: false,
-      error: 'Could not find a second line with 5 syllables for the third line'
-    }
+    return { haiku: [], lines: [], success: false, isExact: false }
   }
 
   return {
@@ -86,14 +88,58 @@ export function generateHaiku(lyrics) {
       { original: line2.line, syllables: 7 },
       { original: line3.line, syllables: 5 }
     ],
-    success: true
+    success: true,
+    isExact: true
+  }
+}
+
+/**
+ * Generate closest possible haiku when exact 5-7-5 not available
+ * @param {string} lyrics - The song lyrics
+ * @returns {{ haiku: string[], lines: { original: string, syllables: number }[], success: boolean, isExact: boolean }}
+ */
+export function generateClosestHaiku(lyrics) {
+  const lines = parseLines(lyrics)
+
+  if (lines.length < 3) {
+    return { haiku: [], lines: [], success: false, isExact: false }
+  }
+
+  const usedIndices = new Set()
+  const targets = [5, 7, 5]
+  const result = []
+
+  for (const target of targets) {
+    // Try exact match first
+    let match = findLineWithSyllables(lines, target, usedIndices)
+
+    // Fall back to closest match
+    if (!match) {
+      match = findClosestLine(lines, target, usedIndices)
+    }
+
+    if (!match) {
+      return { haiku: [], lines: [], success: false, isExact: false }
+    }
+
+    usedIndices.add(match.index)
+    result.push(match)
+  }
+
+  const isExact = result[0].syllables === 5 &&
+                  result[1].syllables === 7 &&
+                  result[2].syllables === 5
+
+  return {
+    haiku: result.map(r => r.line),
+    lines: result.map(r => ({ original: r.line, syllables: r.syllables })),
+    success: true,
+    isExact
   }
 }
 
 /**
  * Analyze lyrics and return syllable counts for all lines
- * @param {string} lyrics - The song lyrics
- * @returns {{ line: string, syllables: number }[]}
  */
 export function analyzeLyrics(lyrics) {
   const lines = parseLines(lyrics)
