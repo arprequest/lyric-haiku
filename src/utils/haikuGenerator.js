@@ -9,6 +9,20 @@ function normalizeText(text) {
 }
 
 /**
+ * Check if candidate text is too similar to any used text
+ * Returns true if candidate should be skipped (is substring or contains used text)
+ */
+function isTooSimilar(candidateNormalized, usedTexts) {
+  for (const used of usedTexts) {
+    // Skip if candidate contains a used line or vice versa
+    if (candidateNormalized.includes(used) || used.includes(candidateNormalized)) {
+      return true
+    }
+  }
+  return false
+}
+
+/**
  * Parse lyrics into individual lines
  * @param {string} lyrics - Raw lyrics text
  * @returns {string[]} - Array of non-empty lines
@@ -31,6 +45,7 @@ function findLineWithSyllables(lines, syllableCount, usedIndices, usedTexts) {
     if (usedIndices.has(i)) continue
     const normalized = normalizeText(lines[i])
     if (usedTexts.has(normalized)) continue
+    if (isTooSimilar(normalized, usedTexts)) continue
     const count = countSyllables(lines[i])
     if (count === syllableCount) {
       return { line: lines[i], index: i, syllables: count }
@@ -50,6 +65,7 @@ function findClosestLine(lines, targetSyllables, usedIndices, usedTexts) {
     if (usedIndices.has(i)) continue
     const normalized = normalizeText(lines[i])
     if (usedTexts.has(normalized)) continue
+    if (isTooSimilar(normalized, usedTexts)) continue
     const count = countSyllables(lines[i])
     // Skip very short or very long lines
     if (count < 2 || count > 12) continue
