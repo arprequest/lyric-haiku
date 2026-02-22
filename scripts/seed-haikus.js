@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 /**
- * Seed haikus for popular songs into D1.
+ * Seed haikus for popular songs into D1 via Cloudflare HTTP API.
  *
  * Prerequisites:
- *   - GENIUS_ACCESS_TOKEN env var (or pass via --token flag)
- *   - wrangler installed and authenticated
+ *   - GENIUS_ACCESS_TOKEN env var
+ *   - CF_EMAIL env var (Cloudflare account email)
+ *   - CF_API_KEY env var (Cloudflare global API key)
+ *   - CF_ACCOUNT_ID env var
+ *   - CF_D1_ID env var (D1 database UUID)
  *
  * Usage:
  *   node scripts/seed-haikus.js
@@ -13,19 +16,12 @@
  */
 
 import { readFileSync } from 'fs'
-import { createRequire } from 'module'
-import { execSync } from 'child_process'
 import { randomUUID } from 'crypto'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import { syllable } from 'syllable'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const require = createRequire(import.meta.url)
-
-// Load syllable counter and haiku generator from src
-// We need to use the compiled/cjs version or inline the logic
-// Since the src files use ES modules, we replicate the core logic here
-import { syllable } from 'syllable'
 
 const args = process.argv.slice(2)
 const DRY_RUN = args.includes('--dry-run')
@@ -33,20 +29,23 @@ const LIMIT = (() => {
   const i = args.indexOf('--limit')
   return i !== -1 ? parseInt(args[i + 1], 10) : Infinity
 })()
-const DB_NAME = args.includes('--remote') ? 'lyric-haiku' : 'lyric-haiku'
-const REMOTE = args.includes('--remote')
 
-const GENIUS_TOKEN = process.env.GENIUS_ACCESS_TOKEN || process.env.GENIUS_API_KEY
+const GENIUS_TOKEN = process.env.GENIUS_ACCESS_TOKEN
+const CF_EMAIL = process.env.CF_EMAIL
+const CF_API_KEY = process.env.CF_API_KEY
+const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID
+const CF_D1_ID = process.env.CF_D1_ID
 
-if (!GENIUS_TOKEN) {
-  console.error('Error: GENIUS_ACCESS_TOKEN environment variable is required')
+if (!GENIUS_TOKEN) { console.error('Missing GENIUS_ACCESS_TOKEN'); process.exit(1) }
+if (!DRY_RUN && (!CF_EMAIL || !CF_API_KEY || !CF_ACCOUNT_ID || !CF_D1_ID)) {
+  console.error('Missing CF_EMAIL, CF_API_KEY, CF_ACCOUNT_ID, or CF_D1_ID')
   process.exit(1)
 }
 
 const songs = JSON.parse(readFileSync(join(__dirname, 'seed-songs.json'), 'utf8'))
-const limited = songs.slice(0, LIMIT === Infinity ? songs.length : LIMIT)
+const limited = LIMIT === Infinity ? songs : songs.slice(0, LIMIT)
 
-// ── Haiku generation (inlined from src/utils) ──────────────────────────────
+// ── Haiku generation ───────────────────────────────────────────────────────
 
 function normalizeText(text) {
   return text.toLowerCase().replace(/[^\w\s]/g, '').trim()
@@ -60,25 +59,16 @@ function isTooSimilar(candidateNormalized, usedTexts) {
 }
 
 function parseLines(lyrics) {
-  return lyrics
-    .split('\n')
-    .map(l => l.trim())
-    .filter(l => l.length > 0)
-    .filter(l => !l.match(/^\[.*\]$/))
-    .filter(l => !l.match(/^\(.*\)$/))
-}
-
-function countSyllables(line) {
-  return syllable(line)
+  return lyrics.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+    .filter(l => !l.match(/^\[.*\]$/)).filter(l => !l.match(/^\(.*\)$/))
 }
 
 function findLineWithSyllables(lines, target, usedIndices, usedTexts) {
   for (let i = 0; i < lines.length; i++) {
     if (usedIndices.has(i)) continue
     const normalized = normalizeText(lines[i])
-    if (usedTexts.has(normalized)) continue
-    if (isTooSimilar(normalized, usedTexts)) continue
-    if (countSyllables(lines[i]) === target) return { line: lines[i], index: i, syllables: target }
+    if (usedTexts.has(normalized) || isTooSimilar(normalized, usedTexts)) continue
+    if (syllable(lines[i]) === target) return { line: lines[i], index: i, syllables: target }
   }
   return null
 }
@@ -88,9 +78,8 @@ function findClosestLine(lines, target, usedIndices, usedTexts) {
   for (let i = 0; i < lines.length; i++) {
     if (usedIndices.has(i)) continue
     const normalized = normalizeText(lines[i])
-    if (usedTexts.has(normalized)) continue
-    if (isTooSimilar(normalized, usedTexts)) continue
-    const count = countSyllables(lines[i])
+    if (usedTexts.has(normalized) || isTooSimilar(normalized, usedTexts)) continue
+    const count = syllable(lines[i])
     if (count < 2 || count > 12) continue
     const diff = Math.abs(count - target)
     if (diff < bestDiff) { bestDiff = diff; best = { line: lines[i], index: i, syllables: count } }
@@ -141,16 +130,13 @@ async function fetchLyrics(url) {
   const matches = []
   let match
   while ((match = containerRegex.exec(html)) !== null) matches.push(match[1])
-
   if (!matches.length) return null
 
   let text = matches.join('\n')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
+    .replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '')
     .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    .replace(/\n{3,}/g, '\n\n').trim()
+    .replace(/&nbsp;/g, ' ').replace(/\n{3,}/g, '\n\n').trim()
 
   const badKeywords = ['translation','contributor','read more','expand','embed','share url',
     'copy link','sign up','log in','you might also like','genius','pyong','see live',
@@ -164,33 +150,38 @@ async function fetchLyrics(url) {
     if (/^\d+\s*(contributors?|translations?|embed)/i.test(l)) return false
     return true
   })
-
   while (lines.length && lines[0] === '') lines.shift()
   while (lines.length && lines[lines.length - 1] === '') lines.pop()
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
 }
 
-// ── D1 insertion via wrangler ──────────────────────────────────────────────
+// ── D1 HTTP API insertion ──────────────────────────────────────────────────
 
-function insertHaiku(id, haiku, song, isExact) {
-  const createdAt = Date.now()
-  const sql = `INSERT OR IGNORE INTO haikus (id, line1, line2, line3, song_title, song_artist, is_exact, created_at) VALUES ('${id}', '${esc(haiku[0])}', '${esc(haiku[1])}', '${esc(haiku[2])}', '${esc(song.title)}', '${esc(song.artist)}', ${isExact ? 1 : 0}, ${createdAt});`
-  const remoteFlag = REMOTE ? '--remote' : '--local'
-  execSync(`npx wrangler d1 execute ${DB_NAME} ${remoteFlag} --command "${sql}"`, {
-    cwd: join(__dirname, '..'),
-    stdio: 'pipe'
-  })
-}
+async function insertHaiku(id, haiku, song, isExact) {
+  const sql = `INSERT OR IGNORE INTO haikus (id, line1, line2, line3, song_title, song_artist, is_exact, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  const params = [id, haiku[0], haiku[1], haiku[2], song.title, song.artist, isExact ? 1 : 0, Date.now()]
 
-function esc(str) {
-  return String(str || '').replace(/'/g, "''")
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/d1/database/${CF_D1_ID}/query`,
+    {
+      method: 'POST',
+      headers: {
+        'X-Auth-Email': CF_EMAIL,
+        'X-Auth-Key': CF_API_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ sql, params })
+    }
+  )
+  const data = await res.json()
+  if (!data.success) throw new Error(JSON.stringify(data.errors))
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
 
 let success = 0, skipped = 0, failed = 0
 
-console.log(`Seeding ${limited.length} songs${DRY_RUN ? ' (dry run)' : REMOTE ? ' (remote D1)' : ' (local D1)'}...\n`)
+console.log(`Seeding ${limited.length} songs${DRY_RUN ? ' (dry run)' : ' (remote D1 via API)'}...\n`)
 
 for (const song of limited) {
   process.stdout.write(`  ${song.artist} — ${song.title} ... `)
@@ -204,12 +195,10 @@ for (const song of limited) {
 
     if (DRY_RUN) {
       console.log(`✓ (dry run)\n    ${result.haiku.join(' / ')}`)
-      success++
-      continue
+      success++; continue
     }
 
-    const id = randomUUID()
-    insertHaiku(id, result.haiku, song, result.isExact)
+    await insertHaiku(randomUUID(), result.haiku, song, result.isExact)
     console.log(`✓ ${result.isExact ? '5-7-5' : 'approx'}`)
     success++
   } catch (err) {
@@ -217,8 +206,8 @@ for (const song of limited) {
     failed++
   }
 
-  // Small delay to avoid hammering Genius
-  await new Promise(r => setTimeout(r, 500))
+  // ~3 req/sec to stay well under Genius 5 req/sec limit
+  await new Promise(r => setTimeout(r, 350))
 }
 
 console.log(`\nDone: ${success} seeded, ${skipped} skipped, ${failed} failed`)
