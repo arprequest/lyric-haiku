@@ -25,7 +25,7 @@ export default function HaikuDisplay({ result, onReset }) {
     const credit = result.song
       ? `\n\n- From "${result.song.title}" by ${result.song.artist}`
       : ''
-    return `${lines}${credit}\n\nCreate your own: haiku.arprequest.com`
+    return `${lines}${credit}\n\nCreate your own: lyric-haiku.com`
   }
 
   const handleTwitterShare = () => {
@@ -34,7 +34,7 @@ export default function HaikuDisplay({ result, onReset }) {
   }
 
   const handleFacebookShare = () => {
-    const url = encodeURIComponent('https://haiku.arprequest.com')
+    const url = encodeURIComponent('https://lyric-haiku.com')
     window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank')
   }
 
