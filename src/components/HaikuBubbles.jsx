@@ -37,7 +37,7 @@ export default function HaikuBubbles({ history, onSelectHaiku }) {
           key={item.id}
           className="haiku-bubble"
           style={bubbleStyles[index]}
-          onClick={() => onSelectHaiku(item)}
+          onClick={() => item.id ? window.open(`/haiku/${item.id}`, '_blank') : onSelectHaiku(item)}
         >
           <div className="bubble-lines">
             {item.haiku.map((line, lineIndex) => (

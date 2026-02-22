@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 export default function HaikuDisplay({ result, onReset }) {
+  const permalink = result?.id ? `https://lyric-haiku.com/haiku/${result.id}` : 'https://lyric-haiku.com'
   const [copied, setCopied] = useState(false)
 
   if (!result) return null
@@ -25,7 +26,7 @@ export default function HaikuDisplay({ result, onReset }) {
     const credit = result.song
       ? `\n\n- From "${result.song.title}" by ${result.song.artist}`
       : ''
-    return `${lines}${credit}\n\nCreate your own: lyric-haiku.com`
+    return `${lines}${credit}\n\n${permalink}`
   }
 
   const handleTwitterShare = () => {
@@ -34,7 +35,7 @@ export default function HaikuDisplay({ result, onReset }) {
   }
 
   const handleFacebookShare = () => {
-    const url = encodeURIComponent('https://lyric-haiku.com')
+    const url = encodeURIComponent(permalink)
     window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank')
   }
 
@@ -89,6 +90,29 @@ export default function HaikuDisplay({ result, onReset }) {
             Create Another
           </button>
         </div>
+
+        {result.song && (
+          <div className="listen-section">
+            <a
+              href={`https://open.spotify.com/search/${encodeURIComponent(`${result.song.title} ${result.song.artist}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="listen-btn listen-spotify"
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+              Listen on Spotify
+            </a>
+            <a
+              href={`https://music.apple.com/search?term=${encodeURIComponent(`${result.song.title} ${result.song.artist}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="listen-btn listen-apple"
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M23.994 6.124a9.23 9.23 0 00-.24-2.19c-.317-1.31-1.062-2.31-2.18-3.043a5.022 5.022 0 00-1.877-.726 10.496 10.496 0 00-1.564-.15c-.04-.003-.083-.01-.124-.013H5.986c-.152.01-.303.017-.454.025C4.948.208 4.432.12 3.947.3c-1.17.48-1.994 1.32-2.467 2.5-.22.56-.335 1.14-.367 1.74-.007.15-.012.302-.013.453v11.501c.01.15.017.302.025.453.056.857.235 1.67.59 2.44.633 1.34 1.664 2.24 3.066 2.73.55.19 1.12.285 1.705.3.16.005.32.01.48.01h11.502c.16 0 .32-.005.48-.01.585-.015 1.155-.11 1.705-.3 1.402-.49 2.433-1.39 3.066-2.73.355-.77.534-1.583.59-2.44.008-.15.015-.302.025-.453V6.577c-.003-.15-.008-.302-.013-.453z"/></svg>
+              Listen on Apple Music
+            </a>
+          </div>
+        )}
 
         <div className="share-section">
           <p className="share-label">Share your haiku</p>

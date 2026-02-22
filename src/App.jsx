@@ -46,7 +46,7 @@ export default function App() {
     if (!result.success) return
 
     const haikuData = {
-      id: crypto.randomUUID(),
+      id: result.id || crypto.randomUUID(),
       haiku: result.haiku,
       song: result.song,
       isExact: result.isExact
@@ -173,7 +173,7 @@ export default function App() {
         result = generateClosestHaiku(data.lyrics)
       }
 
-      const fullResult = { ...result, song }
+      const fullResult = { ...result, song, id: crypto.randomUUID() }
       setHaikuResult(fullResult)
       saveHaikuToCommunity(fullResult)
       trackEvent('generate', { song: song.title, artist: song.artist, isExact: result.isExact })
@@ -237,7 +237,7 @@ export default function App() {
 
           if (result.success && result.isExact) {
             // Found exact 5-7-5 haiku
-            const fullResult = { ...result, song: randomSong }
+            const fullResult = { ...result, song: randomSong, id: crypto.randomUUID() }
             setHaikuResult(fullResult)
             saveHaikuToCommunity(fullResult)
             trackEvent('generate', { song: randomSong.title, artist: randomSong.artist, isExact: true, mode: 'random' })
@@ -260,6 +260,7 @@ export default function App() {
 
       // No exact match found after all attempts, use closest match
       if (lastResult && lastResult.success) {
+        lastResult.id = lastResult.id || crypto.randomUUID()
         setHaikuResult(lastResult)
         saveHaikuToCommunity(lastResult)
         trackEvent('generate', { song: lastResult.song.title, artist: lastResult.song.artist, isExact: false, mode: 'random' })
