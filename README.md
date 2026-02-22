@@ -2,7 +2,7 @@
 
 Transform song lyrics into haiku poetry. Search for any song and generate a haiku with the perfect 5-7-5 syllable pattern.
 
-**Live:** [haiku.arprequest.com](https://haiku.arprequest.com)
+**Live:** [lyric-haiku.com](https://lyric-haiku.com)
 
 ## Features
 
