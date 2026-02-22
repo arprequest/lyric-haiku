@@ -28,6 +28,7 @@ export async function onRequestGet(context) {
       : 'Lyric Haiku'
     const description = haiku.join(' / ')
     const pageUrl = `https://lyric-haiku.com/haiku/${row.id}`
+    const ogImageUrl = `https://lyric-haiku.com/og/${row.id}`
     const spotifyUrl = row.song_title
       ? `https://open.spotify.com/search/${encodeURIComponent(`${row.song_title} ${row.song_artist}`)}`
       : null
@@ -54,11 +55,15 @@ export async function onRequestGet(context) {
   <meta property="og:title" content="${escHtml(title)}" />
   <meta property="og:description" content="${escHtml(description)}" />
   <meta property="og:site_name" content="Lyric Haiku" />
+  <meta property="og:image" content="${escHtml(ogImageUrl)}" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
 
   <!-- Twitter Card -->
-  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${escHtml(title)}" />
   <meta name="twitter:description" content="${escHtml(description)}" />
+  <meta name="twitter:image" content="${escHtml(ogImageUrl)}" />
 
   <!-- JSON-LD -->
   <script type="application/ld+json">
