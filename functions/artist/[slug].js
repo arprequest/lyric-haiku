@@ -52,7 +52,7 @@ export async function onRequestGet(context) {
   <title>${escHtml(title)}</title>
   <meta name="description" content="${escHtml(description)}" />
   <link rel="canonical" href="${escHtml(pageUrl)}" />
-  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="theme-color" content="#635bff" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
@@ -77,34 +77,39 @@ export async function onRequestGet(context) {
   }
   </script>
 
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background: #0a0a0a;
-      color: #f0f0f0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #ffffff;
+      color: #0a2540;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       min-height: 100vh;
       padding: 2rem 1rem;
+      -webkit-font-smoothing: antialiased;
     }
-    .container { max-width: 640px; margin: 0 auto; }
+    .container { max-width: 680px; margin: 0 auto; }
     .logo {
-      display: block;
-      font-size: 0.85rem;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: #888;
+      display: inline-block;
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: #0a2540;
       margin-bottom: 2rem;
       text-decoration: none;
     }
-    .logo span { color: #f5c842; }
+    .logo span { color: #635bff; }
     h1 {
-      font-size: clamp(1.4rem, 4vw, 1.8rem);
-      font-weight: 700;
+      font-size: clamp(1.4rem, 4vw, 2rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
       margin-bottom: 0.4rem;
     }
     .subtitle {
-      color: #666;
-      font-size: 0.85rem;
+      color: #8898aa;
+      font-size: 0.875rem;
       margin-bottom: 2rem;
     }
     .grid {
@@ -115,45 +120,47 @@ export async function onRequestGet(context) {
     }
     .haiku-card {
       display: block;
-      background: #141414;
-      border: 1px solid #222;
+      background: #f6f9fc;
+      border: 1px solid #e6ebf1;
       border-radius: 12px;
       padding: 1.25rem;
       text-decoration: none;
-      transition: border-color 0.15s, transform 0.15s;
+      transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
     }
     .haiku-card:hover {
-      border-color: #f5c842;
+      border-color: #635bff;
+      box-shadow: 0 4px 16px rgba(99,91,255,0.1);
       transform: translateY(-2px);
     }
     .haiku-lines p {
       font-style: italic;
-      color: #f0f0f0;
+      color: #0a2540;
       line-height: 1.7;
       font-size: 0.95rem;
     }
     .haiku-credit {
       margin-top: 0.75rem;
       font-size: 0.75rem;
-      color: #555;
+      color: #8898aa;
     }
     .cta {
       text-align: center;
       padding-top: 1.5rem;
-      border-top: 1px solid #222;
+      border-top: 1px solid #e6ebf1;
     }
-    .cta p { color: #666; font-size: 0.85rem; margin-bottom: 1rem; }
+    .cta p { color: #8898aa; font-size: 0.85rem; margin-bottom: 1rem; }
     .btn-generate {
       display: inline-block;
       padding: 0.6rem 1.5rem;
-      background: #f5c842;
-      color: #0a0a0a;
+      background: #635bff;
+      color: #ffffff;
       border-radius: 999px;
       font-weight: 600;
       font-size: 0.9rem;
       text-decoration: none;
+      transition: background 0.15s;
     }
-    .btn-generate:hover { opacity: 0.85; }
+    .btn-generate:hover { background: #7a73ff; }
   </style>
 </head>
 <body>
@@ -205,10 +212,11 @@ function notFoundPage(slug) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Artist Not Found — Lyric Haiku</title>
   <style>
-    body { background:#0a0a0a; color:#f0f0f0; font-family:sans-serif; display:flex; align-items:center; justify-content:center; min-height:100vh; text-align:center; padding:2rem; }
-    h1 { font-size:1.5rem; margin-bottom:1rem; }
-    p { color:#888; margin-bottom:1.5rem; }
-    a { color:#f5c842; text-decoration:none; }
+    body { background:#ffffff; color:#0a2540; font-family:'Inter',-apple-system,sans-serif; display:flex; align-items:center; justify-content:center; min-height:100vh; text-align:center; padding:2rem; -webkit-font-smoothing:antialiased; }
+    h1 { font-size:1.5rem; font-weight:800; margin-bottom:1rem; }
+    p { color:#8898aa; margin-bottom:1.5rem; }
+    a { color:#635bff; text-decoration:none; }
+    a:hover { color:#7a73ff; }
   </style>
 </head>
 <body>
