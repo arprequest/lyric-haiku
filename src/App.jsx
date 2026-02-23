@@ -329,8 +329,8 @@ export default function App() {
       </main>
 
       <footer className="footer">
-        <p>
-          Built with React • Syllables counted with precision
+        <p className="footer-note">
+          When a song doesn't have lines that land on exactly 5, 7, and 5 syllables, we pick the closest ones — so not every haiku is perfect, but every word is real.
         </p>
       </footer>
     </div>

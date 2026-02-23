@@ -747,6 +747,12 @@ body {
   font-size: 0.875rem;
 }
 
+.footer-note {
+  max-width: 480px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 640px) {
   .header {
