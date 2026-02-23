@@ -40,8 +40,21 @@ export default function HaikuDisplay({ result, onReset }) {
   }
 
   const handleCopyForTikTok = async () => {
+    const text = getShareText()
     try {
-      await navigator.clipboard.writeText(getShareText())
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        // Fallback for iOS Safari < 13.4 and other older browsers
+        const el = document.createElement('textarea')
+        el.value = text
+        el.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0'
+        document.body.appendChild(el)
+        el.focus()
+        el.select()
+        document.execCommand('copy')
+        document.body.removeChild(el)
+      }
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
