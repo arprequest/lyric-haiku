@@ -1,10 +1,22 @@
 // GET /og/[id] — Dynamic OG image for haiku permalink pages
 // Returns a 1200×630 PNG card suitable for Twitter/X, Facebook, iMessage, etc.
+//
+// CF Pages Functions block dynamic WASM compilation (compileStreaming/instantiateStreaming
+// are unavailable; compile/instantiate from buffer are blocked). Static WASM imports
+// (resolved at deploy time by wrangler) produce pre-compiled WebAssembly.Module objects
+// that can be instantiated with WebAssembly.instantiate(module, imports).
 
-import satori from 'satori'
+import satori, { init as initSatori } from 'satori'
 import { Resvg, initWasm } from '@resvg/resvg-wasm'
+import yogaModule from '../../node_modules/satori/yoga.wasm'
+import resvgModule from '../../node_modules/@resvg/resvg-wasm/index_bg.wasm'
 
-// Module-level state — reused within the same isolate lifetime
+// Required: satori's init() only accepts a pre-compiled WebAssembly.Module
+// when in standalone mode. CF Pages blocks dynamic WASM compilation, so
+// static imports (which produce pre-compiled Modules) are the only option.
+process.env.SATORI_STANDALONE = '1'
+
+// Module-level cache — reused within the same isolate lifetime
 let wasmReady = false
 let fontRegular = null
 let fontBold = null
@@ -13,32 +25,27 @@ let fontItalic = null
 async function ensureReady() {
   if (wasmReady && fontRegular && fontBold && fontItalic) return
 
-  const [_, regular, bold, italic] = await Promise.all([
-    wasmReady
-      ? Promise.resolve()
-      : initWasm(
-          fetch('https://unpkg.com/@resvg/resvg-wasm@2.6.2/index_bg.wasm')
-        ).then(() => { wasmReady = true }),
-
+  await Promise.all([
+    // Initialize satori's yoga layout engine with pre-compiled WASM module
+    initSatori(yogaModule),
+    // Initialize resvg SVG renderer with pre-compiled WASM module
+    initWasm(resvgModule),
+    // Fetch Inter fonts
     fontRegular
-      ? Promise.resolve(fontRegular)
+      ? Promise.resolve()
       : fetch('https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfMZg.ttf')
-          .then(r => r.arrayBuffer()),
-
+          .then(r => r.arrayBuffer()).then(buf => { fontRegular = buf }),
     fontBold
-      ? Promise.resolve(fontBold)
+      ? Promise.resolve()
       : fetch('https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuFuYMZg.ttf')
-          .then(r => r.arrayBuffer()),
-
+          .then(r => r.arrayBuffer()).then(buf => { fontBold = buf }),
     fontItalic
-      ? Promise.resolve(fontItalic)
+      ? Promise.resolve()
       : fetch('https://fonts.gstatic.com/s/inter/v20/UcCM3FwrK3iLTcvneQg7Ca725JhhKnNqk4j1ebLhAm8SrXTc2dthjQ.ttf')
-          .then(r => r.arrayBuffer()),
+          .then(r => r.arrayBuffer()).then(buf => { fontItalic = buf }),
   ])
 
-  if (!fontRegular) fontRegular = regular
-  if (!fontBold) fontBold = bold
-  if (!fontItalic) fontItalic = italic
+  wasmReady = true
 }
 
 export async function onRequestGet(context) {
