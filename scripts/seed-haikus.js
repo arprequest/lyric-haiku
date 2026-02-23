@@ -10,9 +10,10 @@
  *   - CF_D1_ID env var (D1 database UUID)
  *
  * Usage:
- *   node scripts/seed-haikus.js
- *   node scripts/seed-haikus.js --limit 20
- *   node scripts/seed-haikus.js --dry-run
+ *   node scripts/seed-haikus.js                  # seed new songs (skip existing)
+ *   node scripts/seed-haikus.js --limit 20       # only process first 20 songs
+ *   node scripts/seed-haikus.js --dry-run        # preview without writing to D1
+ *   node scripts/seed-haikus.js --regen-approximate  # re-run only approximate haikus
  */
 
 import { readFileSync } from 'fs'
@@ -25,6 +26,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const args = process.argv.slice(2)
 const DRY_RUN = args.includes('--dry-run')
+const REGEN_APPROXIMATE = args.includes('--regen-approximate')
 const LIMIT = (() => {
   const i = args.indexOf('--limit')
   return i !== -1 ? parseInt(args[i + 1], 10) : Infinity
@@ -42,18 +44,21 @@ if (!DRY_RUN && (!CF_EMAIL || !CF_API_KEY || !CF_ACCOUNT_ID || !CF_D1_ID)) {
   process.exit(1)
 }
 
-const songs = JSON.parse(readFileSync(join(__dirname, 'seed-songs.json'), 'utf8'))
-const limited = LIMIT === Infinity ? songs : songs.slice(0, LIMIT)
+// ── Haiku generation (mirrors src/utils/haikuGenerator.js) ─────────────────
 
-// ── Haiku generation ───────────────────────────────────────────────────────
+const FILLER_WORDS = new Set([
+  'oh', 'ooh', 'oooh', 'yeah', 'yea', 'yeh', 'whoa', 'woah',
+  'hey', 'ah', 'ahh', 'aah', 'aaah', 'na', 'nah', 'la', 'da',
+  'mm', 'mmm', 'hmm', 'hm', 'uh', 'um', 'yo', 'aye', 'ay',
+])
 
 function normalizeText(text) {
   return text.toLowerCase().replace(/[^\w\s]/g, '').trim()
 }
 
-function isTooSimilar(candidateNormalized, usedTexts) {
-  for (const used of usedTexts) {
-    if (candidateNormalized.includes(used) || used.includes(candidateNormalized)) return true
+function isTooSimilar(candidateNorm, usedNorms) {
+  for (const used of usedNorms) {
+    if (candidateNorm.includes(used) || used.includes(candidateNorm)) return true
   }
   return false
 }
@@ -63,61 +68,151 @@ function parseLines(lyrics) {
     .filter(l => !l.match(/^\[.*\]$/)).filter(l => !l.match(/^\(.*\)$/))
 }
 
-function findLineWithSyllables(lines, target, usedIndices, usedTexts) {
-  for (let i = 0; i < lines.length; i++) {
-    if (usedIndices.has(i)) continue
-    const normalized = normalizeText(lines[i])
-    if (usedTexts.has(normalized) || isTooSimilar(normalized, usedTexts)) continue
-    if (syllable(lines[i]) === target) return { line: lines[i], index: i, syllables: target }
+function stripLeadingFiller(line) {
+  const words = line.split(/\s+/)
+  let i = 0
+  while (i < words.length) {
+    const word = words[i].toLowerCase().replace(/[^a-z]/g, '')
+    if (!word || FILLER_WORDS.has(word) || /^(na+|la+|da+|ba+|mm+|ah+|oh+)$/.test(word)) {
+      i++
+    } else {
+      break
+    }
+  }
+  if (i === 0 || i >= words.length) return null
+  return words.slice(i).join(' ')
+}
+
+function splitAtPunctuation(line) {
+  const parts = line.split(/[,;|]|—|--|\s+-\s+|\s+\/\s+/)
+  if (parts.length < 2) return []
+  return parts
+    .map(p => p.trim())
+    .filter(p => p.length > 2 && /[a-zA-Z]/.test(p) && p.split(/\s+/).length >= 2)
+}
+
+function splitAtConjunction(line) {
+  const results = []
+  const conjRegex = /\s+(and|but|or|so|'?cause|because|when|while|though|if|then|as|till|until)\s+/gi
+  let match
+  while ((match = conjRegex.exec(line)) !== null) {
+    const before = line.slice(0, match.index).trim()
+    const after = line.slice(match.index + match[0].length).trim()
+    if (
+      before.length > 2 && after.length > 2 &&
+      before.split(/\s+/).length >= 2 && after.split(/\s+/).length >= 2
+    ) {
+      results.push(before)
+      results.push(after)
+    }
+  }
+  return results
+}
+
+const SOURCE_PRIORITY = { whole: 0, stripped: 1, fragment: 2, joined: 3 }
+
+function buildCandidates(rawLines) {
+  const seen = new Set()
+  const candidates = []
+
+  function add(text, source) {
+    if (!text) return
+    const t = text.trim()
+    if (t.length < 3) return
+    const norm = normalizeText(t)
+    if (!norm || norm.split(/\s+/).length < 2) return
+    if (seen.has(norm)) return
+    seen.add(norm)
+    candidates.push({ text: t, source, norm })
+  }
+
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = rawLines[i]
+    add(line, 'whole')
+    const stripped = stripLeadingFiller(line)
+    if (stripped) add(stripped, 'stripped')
+    splitAtPunctuation(line).forEach(f => add(f, 'fragment'))
+    splitAtConjunction(line).forEach(f => add(f, 'fragment'))
+    if (i + 1 < rawLines.length) add(line + ' ' + rawLines[i + 1], 'joined')
+  }
+
+  return candidates
+}
+
+function bucketBySyllable(candidates) {
+  const buckets = {}
+  for (const c of candidates) {
+    const n = syllable(c.text.toLowerCase().replace(/[^\w\s']/g, ''))
+    if (n < 2 || n > 10) continue
+    if (!buckets[n]) buckets[n] = []
+    buckets[n].push({ ...c, syllables: n })
+  }
+  for (const n of Object.keys(buckets)) {
+    buckets[n].sort((a, b) => SOURCE_PRIORITY[a.source] - SOURCE_PRIORITY[b.source])
+  }
+  return buckets
+}
+
+function generateHaiku(lyrics) {
+  const rawLines = parseLines(lyrics)
+  const candidates = buildCandidates(rawLines)
+  const buckets = bucketBySyllable(candidates)
+
+  const fives = buckets[5] || []
+  const sevens = buckets[7] || []
+
+  if (fives.length < 2 || sevens.length < 1) return null
+
+  for (const l1 of fives) {
+    const used1 = new Set([l1.norm])
+    for (const l2 of sevens) {
+      if (isTooSimilar(l2.norm, used1)) continue
+      const used12 = new Set([...used1, l2.norm])
+      for (const l3 of fives) {
+        if (isTooSimilar(l3.norm, used12)) continue
+        return { haiku: [l1.text, l2.text, l3.text], isExact: true }
+      }
+    }
   }
   return null
 }
 
-function findClosestLine(lines, target, usedIndices, usedTexts) {
-  let best = null, bestDiff = Infinity
-  for (let i = 0; i < lines.length; i++) {
-    if (usedIndices.has(i)) continue
-    const normalized = normalizeText(lines[i])
-    if (usedTexts.has(normalized) || isTooSimilar(normalized, usedTexts)) continue
-    const count = syllable(lines[i])
-    if (count < 2 || count > 12) continue
-    const diff = Math.abs(count - target)
-    if (diff < bestDiff) { bestDiff = diff; best = { line: lines[i], index: i, syllables: count } }
-  }
-  return best
-}
-
-function generateHaiku(lyrics) {
-  const lines = parseLines(lyrics)
-  const usedIndices = new Set(), usedTexts = new Set()
-  const line1 = findLineWithSyllables(lines, 5, usedIndices, usedTexts)
-  if (!line1) return null
-  usedIndices.add(line1.index); usedTexts.add(normalizeText(line1.line))
-  const line2 = findLineWithSyllables(lines, 7, usedIndices, usedTexts)
-  if (!line2) return null
-  usedIndices.add(line2.index); usedTexts.add(normalizeText(line2.line))
-  const line3 = findLineWithSyllables(lines, 5, usedIndices, usedTexts)
-  if (!line3) return null
-  return { haiku: [line1.line, line2.line, line3.line], isExact: true }
-}
-
 function generateClosestHaiku(lyrics) {
-  const lines = parseLines(lyrics)
-  if (lines.length < 3) return null
-  const usedIndices = new Set(), usedTexts = new Set()
+  const rawLines = parseLines(lyrics)
+  if (rawLines.length < 3) return null
+
+  const candidates = buildCandidates(rawLines)
+  const buckets = bucketBySyllable(candidates)
+  const all = Object.values(buckets).flat()
+  const targets = [5, 7, 5]
   const result = []
-  for (const target of [5, 7, 5]) {
-    let match = findLineWithSyllables(lines, target, usedIndices, usedTexts)
-    if (!match) match = findClosestLine(lines, target, usedIndices, usedTexts)
-    if (!match) return null
-    usedIndices.add(match.index); usedTexts.add(normalizeText(match.line))
-    result.push(match)
+  const usedNorms = new Set()
+
+  for (const target of targets) {
+    const exact = (buckets[target] || []).find(c => !isTooSimilar(c.norm, usedNorms))
+    if (exact) {
+      usedNorms.add(exact.norm)
+      result.push(exact)
+      continue
+    }
+    let best = null, bestDiff = Infinity
+    for (const c of all) {
+      if (isTooSimilar(c.norm, usedNorms)) continue
+      const diff = Math.abs(c.syllables - target)
+      if (diff < bestDiff || (diff === bestDiff && best && SOURCE_PRIORITY[c.source] < SOURCE_PRIORITY[best.source])) {
+        bestDiff = diff; best = c
+      }
+    }
+    if (!best) return null
+    usedNorms.add(best.norm)
+    result.push(best)
   }
+
   const isExact = result[0].syllables === 5 && result[1].syllables === 7 && result[2].syllables === 5
-  return { haiku: result.map(r => r.line), isExact }
+  return { haiku: result.map(r => r.text), isExact }
 }
 
-// ── Lyrics fetching ────────────────────────────────────────────────────────
+// ── Lyrics fetching ─────────────────────────────────────────────────────────
 
 async function fetchLyrics(url) {
   const res = await fetch(url, {
@@ -155,12 +250,9 @@ async function fetchLyrics(url) {
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
 }
 
-// ── D1 HTTP API insertion ──────────────────────────────────────────────────
+// ── D1 HTTP API ─────────────────────────────────────────────────────────────
 
-async function insertHaiku(id, haiku, song, isExact) {
-  const sql = `INSERT OR IGNORE INTO haikus (id, line1, line2, line3, song_title, song_artist, is_exact, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  const params = [id, haiku[0], haiku[1], haiku[2], song.title, song.artist, isExact ? 1 : 0, Date.now()]
-
+async function d1Query(sql, params = []) {
   const res = await fetch(
     `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/d1/database/${CF_D1_ID}/query`,
     {
@@ -175,15 +267,73 @@ async function insertHaiku(id, haiku, song, isExact) {
   )
   const data = await res.json()
   if (!data.success) throw new Error(JSON.stringify(data.errors))
+  return data.result?.[0]
 }
 
-// ── Main ───────────────────────────────────────────────────────────────────
+async function insertHaiku(id, haiku, song, isExact) {
+  await d1Query(
+    `INSERT OR IGNORE INTO haikus (id, line1, line2, line3, song_title, song_artist, is_exact, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, haiku[0], haiku[1], haiku[2], song.title, song.artist, isExact ? 1 : 0, Date.now()]
+  )
+}
 
-let success = 0, skipped = 0, failed = 0
+async function replaceHaiku(oldId, haiku, song) {
+  await d1Query(`DELETE FROM haikus WHERE id = ?`, [oldId])
+  await d1Query(
+    `INSERT INTO haikus (id, line1, line2, line3, song_title, song_artist, is_exact, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [randomUUID(), haiku[0], haiku[1], haiku[2], song.title, song.artist, 1, Date.now()]
+  )
+}
 
-console.log(`Seeding ${limited.length} songs${DRY_RUN ? ' (dry run)' : ' (remote D1 via API)'}...\n`)
+async function fetchApproximateHaikus() {
+  const result = await d1Query(
+    `SELECT id, song_title, song_artist FROM haikus WHERE is_exact = 0`
+  )
+  return result?.results || []
+}
 
-for (const song of limited) {
+// ── Main ────────────────────────────────────────────────────────────────────
+
+const songs = JSON.parse(readFileSync(join(__dirname, 'seed-songs.json'), 'utf8'))
+
+let songsToProcess = songs
+
+if (REGEN_APPROXIMATE) {
+  // Fetch approximate haikus from D1 and filter seeds to only those songs
+  console.log('Fetching approximate haikus from D1...')
+  const approxRows = await fetchApproximateHaikus()
+  console.log(`Found ${approxRows.length} approximate haikus in D1\n`)
+
+  // Build lookup: "title|artist" → row id
+  const approxMap = new Map()
+  for (const row of approxRows) {
+    const key = `${row.song_title?.toLowerCase()}|${row.song_artist?.toLowerCase()}`
+    approxMap.set(key, row.id)
+  }
+
+  // Filter seed list to only songs with approximate haikus in D1
+  songsToProcess = songs.filter(s => {
+    const key = `${s.title.toLowerCase()}|${s.artist.toLowerCase()}`
+    return approxMap.has(key)
+  })
+
+  // Attach the existing D1 id to each song for replacement
+  songsToProcess = songsToProcess.map(s => ({
+    ...s,
+    _existingId: approxMap.get(`${s.title.toLowerCase()}|${s.artist.toLowerCase()}`)
+  }))
+
+  console.log(`${songsToProcess.length} seeded songs have approximate haikus — regenerating...\n`)
+}
+
+if (LIMIT !== Infinity) songsToProcess = songsToProcess.slice(0, LIMIT)
+
+let improved = 0, stillApprox = 0, skipped = 0, failed = 0
+
+const mode = DRY_RUN ? ' (dry run)' : REGEN_APPROXIMATE ? ' (regen approximate)' : ' (remote D1 via API)'
+console.log(`Processing ${songsToProcess.length} songs${mode}...\n`)
+
+for (const song of songsToProcess) {
   process.stdout.write(`  ${song.artist} — ${song.title} ... `)
 
   try {
@@ -194,20 +344,36 @@ for (const song of limited) {
     if (!result) { console.log('✗ no haiku found'); skipped++; continue }
 
     if (DRY_RUN) {
-      console.log(`✓ (dry run)\n    ${result.haiku.join(' / ')}`)
-      success++; continue
+      const tag = result.isExact ? '5-7-5 ✓' : 'approx'
+      console.log(`${tag}\n    ${result.haiku.join(' / ')}`)
+      if (result.isExact) improved++; else stillApprox++
+      continue
     }
 
-    await insertHaiku(randomUUID(), result.haiku, song, result.isExact)
-    console.log(`✓ ${result.isExact ? '5-7-5' : 'approx'}`)
-    success++
+    if (REGEN_APPROXIMATE) {
+      if (result.isExact) {
+        await replaceHaiku(song._existingId, result.haiku, song)
+        console.log('✓ upgraded to 5-7-5')
+        improved++
+      } else {
+        console.log('~ still approximate, keeping original')
+        stillApprox++
+      }
+    } else {
+      await insertHaiku(randomUUID(), result.haiku, song, result.isExact)
+      console.log(`✓ ${result.isExact ? '5-7-5' : 'approx'}`)
+      if (result.isExact) improved++; else stillApprox++
+    }
   } catch (err) {
     console.log(`✗ ${err.message}`)
     failed++
   }
 
-  // ~3 req/sec to stay well under Genius 5 req/sec limit
   await new Promise(r => setTimeout(r, 350))
 }
 
-console.log(`\nDone: ${success} seeded, ${skipped} skipped, ${failed} failed`)
+if (REGEN_APPROXIMATE) {
+  console.log(`\nDone: ${improved} upgraded to exact, ${stillApprox} still approximate, ${skipped} skipped, ${failed} failed`)
+} else {
+  console.log(`\nDone: ${improved} exact, ${stillApprox} approximate, ${skipped} skipped, ${failed} failed`)
+}
