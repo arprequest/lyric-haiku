@@ -207,10 +207,19 @@ export async function onRequestGet(context) {
 </body>
 </html>`
 
-    return new Response(html, {
+    const response = new Response(html, {
       status: 200,
       headers: { 'Content-Type': 'text/html;charset=UTF-8' }
     })
+
+    context.waitUntil(
+      env.DB.prepare('INSERT INTO events (type, data, created_at) VALUES (?, ?, ?)')
+        .bind('permalink_view', JSON.stringify({ id: row.id, song_title: row.song_title, song_artist: row.song_artist }), Date.now())
+        .run()
+        .catch(() => {})
+    )
+
+    return response
   } catch (error) {
     console.error('Error rendering haiku page:', error)
     return new Response('Server error', { status: 500 })

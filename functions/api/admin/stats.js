@@ -25,6 +25,9 @@ export async function onRequestGet(context) {
       topArtists,
       topSongs,
       exactRatio,
+      contentStats,
+      topPermalinks,
+      topArtistPages,
       todayEvents,
       recentEvents,
       eventsByType
@@ -68,6 +71,37 @@ export async function onRequestGet(context) {
         GROUP BY is_exact
       `).all(),
 
+      // Content stats: distinct artists, songs
+      env.DB.prepare(`
+        SELECT
+          COUNT(DISTINCT song_artist) as distinctArtists,
+          COUNT(DISTINCT song_title || '|' || song_artist) as distinctSongs
+        FROM haikus
+        WHERE song_artist IS NOT NULL
+      `).first(),
+
+      // Top permalink pages by views
+      env.DB.prepare(`
+        SELECT json_extract(data, '$.song_title') || ' - ' || json_extract(data, '$.song_artist') as name,
+               COUNT(*) as value
+        FROM events
+        WHERE type = 'permalink_view'
+          AND json_extract(data, '$.song_title') IS NOT NULL
+        GROUP BY json_extract(data, '$.id')
+        ORDER BY value DESC
+        LIMIT 10
+      `).all(),
+
+      // Top artist pages by views
+      env.DB.prepare(`
+        SELECT json_extract(data, '$.artist') as name, COUNT(*) as value
+        FROM events
+        WHERE type = 'artist_view'
+        GROUP BY json_extract(data, '$.slug')
+        ORDER BY value DESC
+        LIMIT 10
+      `).all(),
+
       // Today's event counts by type
       env.DB.prepare(`
         SELECT type, COUNT(*) as count
@@ -98,6 +132,12 @@ export async function onRequestGet(context) {
       todayEventMap[row.type] = row.count
     }
 
+    // All-time event totals
+    const allTimeMap = {}
+    for (const row of eventsByType.results || []) {
+      allTimeMap[row.type] = row.count
+    }
+
     return Response.json({
       haikus: {
         total: totalHaikus?.count || 0,
@@ -106,6 +146,18 @@ export async function onRequestGet(context) {
         topSongs: topSongs.results || [],
         exactCount: exactRatio.results?.find(r => r.is_exact === 1)?.count || 0,
         approximateCount: exactRatio.results?.find(r => r.is_exact === 0)?.count || 0
+      },
+      content: {
+        distinctArtists: contentStats?.distinctArtists || 0,
+        distinctSongs: contentStats?.distinctSongs || 0,
+        permalinkViewsTotal: allTimeMap['permalink_view'] || 0,
+        artistViewsTotal: allTimeMap['artist_view'] || 0,
+        ogRequestsTotal: allTimeMap['og_request'] || 0,
+        permalinkViewsToday: todayEventMap['permalink_view'] || 0,
+        artistViewsToday: todayEventMap['artist_view'] || 0,
+        ogRequestsToday: todayEventMap['og_request'] || 0,
+        topPermalinks: topPermalinks.results || [],
+        topArtistPages: topArtistPages.results || [],
       },
       events: {
         searchesToday: todayEventMap['search'] || 0,

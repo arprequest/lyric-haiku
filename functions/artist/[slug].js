@@ -181,13 +181,22 @@ export async function onRequestGet(context) {
 </body>
 </html>`
 
-    return new Response(html, {
+    const response = new Response(html, {
       status: 200,
       headers: {
         'Content-Type': 'text/html;charset=UTF-8',
         'Cache-Control': 'public, max-age=3600'
       }
     })
+
+    context.waitUntil(
+      env.DB.prepare('INSERT INTO events (type, data, created_at) VALUES (?, ?, ?)')
+        .bind('artist_view', JSON.stringify({ slug, artist: artistName, count: result.results.length }), Date.now())
+        .run()
+        .catch(() => {})
+    )
+
+    return response
   } catch (error) {
     console.error('Error rendering artist page:', error)
     return new Response('Server error', { status: 500 })

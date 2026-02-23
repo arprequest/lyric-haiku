@@ -78,7 +78,10 @@ export default function AdminApp() {
       search: 'blue',
       generate: 'green',
       error: 'red',
-      page_view: 'gray'
+      page_view: 'gray',
+      permalink_view: 'violet',
+      artist_view: 'indigo',
+      og_request: 'cyan',
     }
     return <Badge color={colors[type] || 'gray'}>{type}</Badge>
   }
@@ -200,6 +203,58 @@ export default function AdminApp() {
                 />
               ) : (
                 <Text className="mt-4">No data available</Text>
+              )}
+            </Card>
+          </Grid>
+
+          {/* Content & SEO Row */}
+          <Grid numItemsSm={2} numItemsLg={4} className="gap-4 mb-6">
+            <Card decoration="top" decorationColor="violet">
+              <Text>Indexed Pages</Text>
+              <Metric>{stats?.haikus?.total || 0}</Metric>
+              <Text className="mt-1 text-xs text-gray-500">{stats?.content?.distinctArtists || 0} artists · {stats?.content?.distinctSongs || 0} songs</Text>
+            </Card>
+            <Card decoration="top" decorationColor="indigo">
+              <Text>Permalink Views</Text>
+              <Metric>{stats?.content?.permalinkViewsTotal || 0}</Metric>
+              <Text className="mt-1 text-xs text-gray-500">{stats?.content?.permalinkViewsToday || 0} today</Text>
+            </Card>
+            <Card decoration="top" decorationColor="blue">
+              <Text>Artist Page Views</Text>
+              <Metric>{stats?.content?.artistViewsTotal || 0}</Metric>
+              <Text className="mt-1 text-xs text-gray-500">{stats?.content?.artistViewsToday || 0} today</Text>
+            </Card>
+            <Card decoration="top" decorationColor="cyan">
+              <Text>OG Image Requests</Text>
+              <Metric>{stats?.content?.ogRequestsTotal || 0}</Metric>
+              <Text className="mt-1 text-xs text-gray-500">{stats?.content?.ogRequestsToday || 0} today</Text>
+            </Card>
+          </Grid>
+
+          {/* Top Permalink & Artist Pages */}
+          <Grid numItemsSm={1} numItemsLg={2} className="gap-4 mb-6">
+            <Card>
+              <Title>Top Permalink Pages</Title>
+              {stats?.content?.topPermalinks?.length > 0 ? (
+                <BarList
+                  data={stats.content.topPermalinks}
+                  className="mt-4"
+                  color="violet"
+                />
+              ) : (
+                <Text className="mt-4">No views recorded yet</Text>
+              )}
+            </Card>
+            <Card>
+              <Title>Top Artist Pages</Title>
+              {stats?.content?.topArtistPages?.length > 0 ? (
+                <BarList
+                  data={stats.content.topArtistPages}
+                  className="mt-4"
+                  color="indigo"
+                />
+              ) : (
+                <Text className="mt-4">No views recorded yet</Text>
               )}
             </Card>
           </Grid>

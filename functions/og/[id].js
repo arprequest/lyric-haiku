@@ -81,12 +81,21 @@ export async function onRequestGet(context) {
     const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: 1200 } })
     const png = resvg.render().asPng()
 
-    return new Response(png, {
+    const response = new Response(png, {
       headers: {
         'Content-Type': 'image/png',
         'Cache-Control': 'public, max-age=31536000, immutable',
       },
     })
+
+    context.waitUntil(
+      env.DB.prepare('INSERT INTO events (type, data, created_at) VALUES (?, ?, ?)')
+        .bind('og_request', JSON.stringify({ id, song_title: row.song_title, song_artist: row.song_artist }), Date.now())
+        .run()
+        .catch(() => {})
+    )
+
+    return response
   } catch (err) {
     console.error('OG image error:', err)
     return new Response('Error generating image', { status: 500 })
